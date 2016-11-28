@@ -7,6 +7,8 @@ def MutateConnection(network):
 	network.Connect(random.randint(0,len(network.net)-1), random.randint(0,len(network.net)-1), random.random())
 def MutateChangeWeight(network):
 	neuron = random.choice(network.neurons)
+	if len(neuron.weights) == 0:
+		return
 	if random.choice((True, False)):
 		neuron.weights[random.randint(0, len(neuron.weights)-1)] += random.random()**2
 	else:
@@ -14,8 +16,16 @@ def MutateChangeWeight(network):
 def MutateOutputs(network):
 	neuron = random.choice(network.neurons)
 	neuron.lastout = random.random()
-		
-mutations = {MutateNewNeuron: 0.01, MutateConnection: 0.3, MutateChangeWeight: 0.6, MutateOutputs: 0.6}
+def MutateBias1(network):
+	neuron = random.choice(network.neurons)
+	if random.choice((True, False)):
+		neuron.bias += random.random()**2
+	else:
+		neuron.bias -= random.random()**2
+def MutateBias2(network):
+	neuron = random.choice(network.neurons)
+	neuron.bias = random.random()
+mutations = {MutateNewNeuron: 0.01, MutateConnection: 0.3, MutateBias2: 0.3, MutateChangeWeight: 0.6, MutateBias1: 0.6, MutateOutputs: 0.6}
 
 class Neuron():
 	def __init__(self, weights = []):
@@ -170,8 +180,8 @@ class Network():
 
 def DivNet(network, nummutate = 5):
 	new = deepcopy(network)
-	for i in range(nummuate):
-		mutation = random.choice(mutations)
+	for i in range(nummutate):
+		mutation = random.choice(mutations.keys())
 		if random.random() < mutations[mutation]:
 			mutation(new)
 	return network, new
