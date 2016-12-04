@@ -5,8 +5,10 @@ import sys
 from Net4 import *
 import pygame
 from pygame.locals import *
+from pickle import HIGHEST_PROTOCOL
+from pickle import dump
 
-FPS = 100
+FPS = float("inf")
 SCREENWIDTH  = 288
 SCREENHEIGHT = 512
 # amount by which base can maximum shift to left
@@ -16,6 +18,9 @@ BASEY        = SCREENHEIGHT * 0.79
 IMAGES, SOUNDS, HITMASKS = {}, {}, {}
 
 POPULATION_SIZE = 50
+
+GRAPHICS = True
+TEXT = True
 
 networks = [Network([[],[],[],[],[]]) for i in range(POPULATION_SIZE)]
 
@@ -38,6 +43,7 @@ def DivNets(networks):
 	return output
 	
 for network in networks:
+	network.nextupdates = set(list(network.neurons))
 	for i in range(5):
 		mutation = random.choice(mutations.keys())
 		if random.random() < mutations[mutation]:
@@ -80,7 +86,7 @@ PIPES_LIST = (
 
 
 def main():
-	global SCREEN, FPSCLOCK, networks
+	global SCREEN, FPSCLOCK, networks, GRAPHICS, TEXT, FPS
 	pygame.init()
 	FPSCLOCK = pygame.time.Clock()
 	SCREEN = pygame.display.set_mode((SCREENWIDTH, SCREENHEIGHT))
@@ -123,22 +129,37 @@ def main():
 		org = 0
 		fit = []
 		for network in networks:
-			print "Generation "+str(gen)+" Organism "+str(org)
+			if TEXT:
+				print "Generation "+str(gen)+" Organism "+str(org)
+			network.nextupdates = set(network.neurons)
+			for neuron in network.neurons:
+				neuron.initiallastout = neuron.lastout
 			fitness = Test(network)
-			print "Fitness: "+str(fitness)
+			for neuron in network.neurons:
+				neuron.lastout = neuron.initiallastout
+			if TEXT:
+				print "Fitness: "+str(fitness)
 			fit.append(fitness)
 			org += 1
+		maxfitness = max(fit)
+		if TEXT:
+			print "--------"
+			print "Gen Fitness: "+str(maxfitness)
+			print "--------"
+		with open("NETWORK", "wb") as output:
+			dump(networks[fit.index(maxfitness)], output, HIGHEST_PROTOCOL)
 		networks = KillNets(networks, fit)
 		networks = DivNets(networks)
+		random.shuffle(networks)
 		gen += 1
 	
 def Test(network):
 	# select random background sprites
-	randBg = random.randint(0, len(BACKGROUNDS_LIST) - 1)
+	randBg = 0
 	IMAGES['background'] = pygame.image.load(BACKGROUNDS_LIST[randBg]).convert()
 
 	# select random player sprites
-	randPlayer = random.randint(0, len(PLAYERS_LIST) - 1)
+	randPlayer = 0
 	IMAGES['player'] = (
 		pygame.image.load(PLAYERS_LIST[randPlayer][0]).convert_alpha(),
 		pygame.image.load(PLAYERS_LIST[randPlayer][1]).convert_alpha(),
@@ -223,10 +244,11 @@ def showWelcomeAnimation():
 
 
 def mainGame(movementInfo, network):
+	global GRAPHICS, TEXT, FPS
 	fitness = 0
 	score = playerIndex = loopIter = 0
 	playerIndexGen = movementInfo['playerIndexGen']
-	playerx, playery = int(SCREENWIDTH * 0.2), movementInfo['playery']
+	playerx, playery = int(SCREENWIDTH * 0.2), SCREENHEIGHT/2 - 100
 
 	basex = movementInfo['basex']
 	baseShift = IMAGES['base'].get_width() - IMAGES['background'].get_width()
@@ -238,13 +260,11 @@ def mainGame(movementInfo, network):
 	# list of upper pipes
 	upperPipes = [
 		{'x': SCREENWIDTH + 200, 'y': newPipe1[0]['y']},
-		{'x': SCREENWIDTH + 200 + (SCREENWIDTH / 2), 'y': newPipe2[0]['y']},
 	]
 
 	# list of lowerpipe
 	lowerPipes = [
 		{'x': SCREENWIDTH + 200, 'y': newPipe1[1]['y']},
-		{'x': SCREENWIDTH + 200 + (SCREENWIDTH / 2), 'y': newPipe2[1]['y']},
 	]
 
 	pipeVelX = -4
@@ -263,6 +283,15 @@ def mainGame(movementInfo, network):
 			if event.type == QUIT or (event.type == KEYDOWN and event.key == K_ESCAPE):
 				pygame.quit()
 				sys.exit()
+			if event.type == KEYDOWN:
+				if event.key == K_s:
+					FPS = 30
+				elif event.key == K_f:
+					FPS = float("inf")
+				elif event.key == K_t:
+					TEXT = not TEXT
+				elif event.key == K_g:
+					GRAPHICS = not GRAPHICS
 		if len(network.neurons) >= 1:
 			if network.neurons[0].lastout <= 0.5:
 				threshold = True
@@ -272,7 +301,10 @@ def mainGame(movementInfo, network):
 					playerFlapped = True
 					SOUNDS['wing'].play()
 					threshold = False
-
+		for ind in network.inputs1:
+			network.neurons[ind].lastout = (lowerPipes[-1]["y"]/2.0+upperPipes[-1]["y"]/2.0)/SCREENHEIGHT
+		for ind in network.inputs2:
+			network.neurons[ind].lastout = float(playery)/SCREENHEIGHT
 		# check for crash here
 		crashTest = checkCrash({'x': playerx, 'y': playery, 'index': playerIndex},
 							   upperPipes, lowerPipes)
@@ -286,6 +318,9 @@ def mainGame(movementInfo, network):
 			if pipeMidPos <= playerMidPos < pipeMidPos + 4:
 				score += 1
 				SOUNDS['point'].play()
+				newPipe = getRandomPipe()
+				upperPipes.append(newPipe[0])
+				lowerPipes.append(newPipe[1])
 
 		# playerIndex basex change
 		if (loopIter + 1) % 3 == 0:
@@ -307,10 +342,6 @@ def mainGame(movementInfo, network):
 			lPipe['x'] += pipeVelX
 
 		# add new pipe when first pipe is about to touch left of screen
-		if 0 < upperPipes[0]['x'] < 5:
-			newPipe = getRandomPipe()
-			upperPipes.append(newPipe[0])
-			lowerPipes.append(newPipe[1])
 
 		# remove first pipe if its out of the screen
 		if upperPipes[0]['x'] < -IMAGES['pipe'][0].get_width():
@@ -318,21 +349,23 @@ def mainGame(movementInfo, network):
 			lowerPipes.pop(0)
 
 		# draw sprites
-		SCREEN.blit(IMAGES['background'], (0,0))
+		if GRAPHICS:
+			SCREEN.blit(IMAGES['background'], (0,0))
 
-		for uPipe, lPipe in zip(upperPipes, lowerPipes):
-			SCREEN.blit(IMAGES['pipe'][0], (uPipe['x'], uPipe['y']))
-			SCREEN.blit(IMAGES['pipe'][1], (lPipe['x'], lPipe['y']))
+			for uPipe, lPipe in zip(upperPipes, lowerPipes):
+				SCREEN.blit(IMAGES['pipe'][0], (uPipe['x'], uPipe['y']))
+				SCREEN.blit(IMAGES['pipe'][1], (lPipe['x'], lPipe['y']))
 
-		SCREEN.blit(IMAGES['base'], (basex, BASEY))
-		# print score so player overlaps the score
-		showScore(score)
-		SCREEN.blit(IMAGES['player'][playerIndex], (playerx, playery))
+			SCREEN.blit(IMAGES['base'], (basex, BASEY))
+			# print score so player overlaps the score
+			showScore(score)
+			SCREEN.blit(IMAGES['player'][playerIndex], (playerx, playery))
 
 		fitness += 1
 		
-		pygame.display.update()
-		FPSCLOCK.tick(FPS)
+		if GRAPHICS:
+			pygame.display.update()
+			FPSCLOCK.tick(FPS)
 		network.Step()
 
 
@@ -434,6 +467,8 @@ def checkCrash(player, upperPipes, lowerPipes):
 
 	# if player crashes into ground
 	if player['y'] + player['h'] >= BASEY - 1:
+		return [True, True]
+	if player['y'] + player['h'] <= 0:
 		return [True, True]
 	else:
 
