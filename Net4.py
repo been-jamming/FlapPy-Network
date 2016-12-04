@@ -3,32 +3,35 @@ from copy import deepcopy
 
 def MutateNewNeuron(network):
 	network.AddNeuron([])
+def MutateNewInpNeuron(network):
+	network.inputs1.append(len(network.neurons))
+	network.AddNeuron([])
+def MutateNewInpNeuron2(network):
+	network.inputs2.append(len(network.neurons))
+	network.AddNeuron([])
 def MutateConnection(network):
-	network.Connect(random.randint(0,len(network.net)-1), random.randint(0,len(network.net)-1), random.random())
+	network.Connect(random.randint(0,len(network.net)-1), random.randint(0,len(network.net)-1), random.random()*random.choice((-1,1)))
 def MutateChangeWeight(network):
 	neuron = random.choice(network.neurons)
 	if len(neuron.weights) == 0:
 		return
-	if random.choice((True, False)):
-		neuron.weights[random.randint(0, len(neuron.weights)-1)] += random.random()**2
-	else:
-		neuron.weights[random.randint(0, len(neuron.weights)-1)] -= random.random()**2
+	neuron.weights[random.randint(0, len(neuron.weights)-1)] += (random.random()**3)*random.choice((-1,1))
 def MutateOutputs(network):
 	neuron = random.choice(network.neurons)
-	neuron.lastout = random.random()
+	neuron.lastout = random.random()*random.choice((-1,1))
 def MutateBias1(network):
 	neuron = random.choice(network.neurons)
-	if random.choice((True, False)):
-		neuron.bias += random.random()**2
-	else:
-		neuron.bias -= random.random()**2
+	neuron.bias += (random.random()**3)*random.choice((-1,1))
 def MutateBias2(network):
 	neuron = random.choice(network.neurons)
-	neuron.bias = random.random()
-mutations = {MutateNewNeuron: 0.01, MutateConnection: 0.3, MutateBias2: 0.3, MutateChangeWeight: 0.6, MutateBias1: 0.6, MutateOutputs: 0.6}
+	neuron.bias = random.random()*random.choice((-1,1))
+def MutateActivate(network):
+	neuron = random.choice(network.neurons)
+	neuron.activate = not neuron.activate
+mutations = {MutateNewNeuron: 0.01, MutateNewInpNeuron: 0.01, MutateNewInpNeuron2: 0.01, MutateConnection: 0.3, MutateBias2: 0.3, MutateChangeWeight: 0.6, MutateBias1: 0.6, MutateOutputs: 0.6, MutateActivate: 0.1}
 
 class Neuron():
-	def __init__(self, weights = []):
+	def __init__(self, weights = [], activate = True):
 		self.weights = list(weights)
 		self.dw = [0]*len(weights)
 		self.db = 0
@@ -36,16 +39,33 @@ class Neuron():
 		self.lastout = 0
 		self.bias = 0
 		self.error = 0
+		self.activate = activate
 		self.inpneurons = []
 		self.outneurons = []
-	def Eval(self, inputs):
+	def Eval(self, inputs, updating = True):
 		self.inputs = inputs
 		Sum = 0
 		for inp, weight in zip(inputs, self.weights):
 			Sum += inp*weight
 		Sum += self.bias
-		self.lastout = 1/(1+math.exp(-Sum))
-		return self.lastout
+		if updating:
+			if self.activate:
+				self.lastout = math.tanh(Sum)
+			else:
+				if Sum > 0:
+					self.lastout = 1
+				else:
+					self.lastout = -1
+			return self.lastout
+		else:
+			if self.activate:
+				self.nextout = math.tanh(Sum)
+			else:
+				if Sum > 0:
+					self.nextout = 1
+				else:
+					self.nextout = -1
+			return self.nextout
 	def Teach(self, u = 0.05, m = 0):
 		for w in range(len(self.weights)):
 			self.dw[w] = self.inputs[w]*self.error*u + m*self.dw[w]
@@ -146,6 +166,8 @@ class Network():
 		else:
 			self.neurons = []
 		self.nextupdates = set([])
+		self.inputs1 = []
+		self.inputs2 = []
 		for neuron in self.neurons:
 			neuron.weights = [0 for n in neuron.inpneurons]
 		self.net = net
@@ -157,8 +179,10 @@ class Network():
 			next = set([])
 			for neuron in self.nextupdates:
 				inps = [n.lastout for n in neuron.inpneurons]
-				neuron.Eval(inps)
+				neuron.Eval(inps, False)
 				next = next.union(neuron.outneurons)
+			for neuron in self.nextupdates:
+				neuron.lastout = neuron.nextout
 			self.nextupdates = next
 	def AddNeuron(self, outputs):
 		self.neurons.append(Neuron())
@@ -178,7 +202,7 @@ class Network():
 		else:
 			self.neurons[inp].weights[self.neurons[inp].inpneurons.index(self.neurons[out])] = weight
 
-def DivNet(network, nummutate = 5):
+def DivNet(network, nummutate = 6):
 	new = deepcopy(network)
 	for i in range(nummutate):
 		mutation = random.choice(mutations.keys())
