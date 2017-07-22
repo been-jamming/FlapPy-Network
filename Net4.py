@@ -10,21 +10,27 @@ def MutateNewInpNeuron2(network):
 	network.inputs2.append(len(network.neurons))
 	network.AddNeuron([])
 def MutateConnection(network):
-	network.Connect(random.randint(0,len(network.net)-1), random.randint(0,len(network.net)-1), random.random()*random.choice((-1,1)))
+	network.Connect(random.randint(0,len(network.net)-1), random.randint(0,len(network.net)-1), random.random())
 def MutateChangeWeight(network):
 	neuron = random.choice(network.neurons)
 	if len(neuron.weights) == 0:
 		return
-	neuron.weights[random.randint(0, len(neuron.weights)-1)] += (random.random()**3)*random.choice((-1,1))
+	if random.choice((True, False)):
+		neuron.weights[random.randint(0, len(neuron.weights)-1)] += random.random()**2
+	else:
+		neuron.weights[random.randint(0, len(neuron.weights)-1)] -= random.random()**2
 def MutateOutputs(network):
 	neuron = random.choice(network.neurons)
-	neuron.lastout = random.random()*random.choice((-1,1))
+	neuron.lastout = random.random()
 def MutateBias1(network):
 	neuron = random.choice(network.neurons)
-	neuron.bias += (random.random()**3)*random.choice((-1,1))
+	if random.choice((True, False)):
+		neuron.bias += random.random()**2
+	else:
+		neuron.bias -= random.random()**2
 def MutateBias2(network):
 	neuron = random.choice(network.neurons)
-	neuron.bias = random.random()*random.choice((-1,1))
+	neuron.bias = random.random()
 def MutateActivate(network):
 	neuron = random.choice(network.neurons)
 	neuron.activate = not neuron.activate
